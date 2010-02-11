@@ -4,7 +4,7 @@
 end
 
 module Sunspot
-  # 
+  #
   # This class encapsulates the results of a Solr search. It provides access
   # to search results, total result count, facets, and pagination information.
   # Instances of Search are returned by the Sunspot.search and
@@ -15,7 +15,7 @@ module Sunspot
     # using the search DSL, this method allows you to access the query API
     # directly. See Sunspot#new_search for how to construct the search object
     # in this case.
-    attr_reader :query 
+    attr_reader :query
 
     def initialize(connection, setup, query, configuration) #:nodoc:
       @connection, @setup, @query = connection, setup, query
@@ -33,12 +33,18 @@ module Sunspot
     def execute
       reset
       params = @query.to_params
-      @solr_result = @connection.select(params)
+
+      if query.is_a?(Sunspot::Query::MoreLikeThis)
+        @solr_result = @connection.mlt(params)
+      else
+        @solr_result = @connection.select(params)
+      end
+
       self
     end
     alias_method :execute!, :execute #:nodoc: deprecated
 
-    # 
+    #
     # Get the collection of results as instantiated objects. If WillPaginate is
     # available, the results will be a WillPaginate::Collection instance; if
     # not, it will be a vanilla Array.
@@ -54,7 +60,7 @@ module Sunspot
       @results ||= maybe_will_paginate(verified_hits.map { |hit| hit.instance })
     end
 
-    # 
+    #
     # Access raw Solr result information. Returns a collection of Hit objects
     # that contain the class name, primary key, keyword relevance score (if
     # applicable), and any stored fields.
@@ -99,7 +105,7 @@ module Sunspot
       end
     end
 
-    # 
+    #
     # The total number of documents matching the query parameters
     #
     # ==== Returns
@@ -110,7 +116,7 @@ module Sunspot
       @total ||= solr_response['numFound']
     end
 
-    # 
+    #
     # Get the facet object for the given name. `name` can either be the name
     # given to a query facet, or the field name of a field facet. Returns a
     # Sunspot::Facet object.
@@ -160,14 +166,14 @@ module Sunspot
       end
     end
 
-    # 
+    #
     # Deprecated in favor of optional second argument to #facet
     #
     def dynamic_facet(base_name, dynamic_name) #:nodoc:
       facet(base_name, dynamic_name)
     end
 
-    # 
+    #
     # Get the data accessor that will be used to load a particular class out of
     # persistent storage. Data accessors can implement any methods that may be
     # useful for refining how data is loaded out of storage. When building a
@@ -181,7 +187,7 @@ module Sunspot
         Adapters::DataAccessor.create(clazz)
     end
 
-    # 
+    #
     # Build this search using a DSL block. This method can be called more than
     # once on an unexecuted search (e.g., Sunspot.new_search) in order to build
     # a search incrementally.
@@ -199,7 +205,7 @@ module Sunspot
       self
     end
 
-    # 
+    #
     # Populate the Hit objects with their instances. This is invoked the first
     # time any hit has its instance requested, and all hits are loaded as a
     # batch.
@@ -243,7 +249,8 @@ module Sunspot
     private
 
     def solr_response
-      @solr_response ||= @solr_result['response']
+      # the response will be nil for a MoreLikeThis search with no matches
+      @solr_response ||= (@solr_result['response'] || {'docs' => []})
     end
 
     def dsl
@@ -269,7 +276,7 @@ module Sunspot
         collection
       end
     end
-    
+
     # Clear out all the cached ivars so the search can be called again.
     def reset
       @results = @hits = @verified_hits = @total = @solr_response = @doc_ids = nil

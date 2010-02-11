@@ -1,5 +1,5 @@
 module Sunspot
-  # 
+  #
   # This class encapsulates the search/indexing setup for a given class. Its
   # contents are built using the Sunspot.setup method.
   #
@@ -12,6 +12,7 @@ module Sunspot
         @field_factories_cache, @text_field_factories_cache,
         @dynamic_field_factories_cache = *Array.new(6) { Hash.new }
       @stored_field_factories_cache = Hash.new { |h, k| h[k] = [] }
+      @more_like_this_factories_cache = Hash.new { |h, k| h[k] = [] }
       @dsl = DSL::Fields.new(self)
       add_field_factory(:class, Type::ClassType.instance)
     end
@@ -20,7 +21,7 @@ module Sunspot
       [@class_name]
     end
 
-    # 
+    #
     # Add field factory for scope/ordering
     #
     def add_field_factory(name, type, options = {}, &block)
@@ -33,7 +34,7 @@ module Sunspot
       end
     end
 
-    # 
+    #
     # Add field_factories for fulltext search
     #
     # ==== Parameters
@@ -42,11 +43,16 @@ module Sunspot
     #
     def add_text_field_factory(name, options = {}, &block)
       stored = options[:stored]
+      more_like_this = [:more_like_this]
       field_factory = FieldFactory::Static.new(name, Type::TextType.instance, options, &block)
       @text_field_factories[name] = field_factory
       @text_field_factories_cache[field_factory.name] = field_factory
       if stored
         @stored_field_factories_cache[field_factory.name] << field_factory
+      end
+
+      if more_like_this
+        @more_like_this_factories_cache[field_factory.name] <<  field_factory
       end
     end
 
@@ -54,9 +60,9 @@ module Sunspot
     # Add dynamic field_factories
     #
     # ==== Parameters
-    # 
+    #
     # field_factories<Array>:: Array of dynamic field objects
-    # 
+    #
     def add_dynamic_field_factory(name, type, options = {}, &block)
       stored = options[:stored]
       field_factory = FieldFactory::Dynamic.new(name, type, options, &block)
@@ -67,7 +73,7 @@ module Sunspot
       end
     end
 
-    # 
+    #
     # The coordinates field factory is used for populating the coordinate fields
     # of documents during index, but does not actually generate fields (since
     # the field names used in search are static).
@@ -76,7 +82,7 @@ module Sunspot
       @coordinates_field_factory = FieldFactory::Coordinates.new(name, &block)
     end
 
-    # 
+    #
     # Add a document boost to documents at index time. Document boost can be
     # static (the same for all documents of this class), or extracted on a per-
     # document basis using either attribute or block extraction as per usual.
@@ -94,14 +100,14 @@ module Sunspot
         end
     end
 
-    # 
+    #
     # Builder method for evaluating the setup DSL
     #
     def setup(&block)
       Util.instance_eval_or_call(@dsl, &block)
     end
 
-    # 
+    #
     # Return the Field with the given (public-facing) name
     #
     def field(field_name)
@@ -115,13 +121,13 @@ module Sunspot
       end
     end
 
-    # 
+    #
     # Return one or more text fields with the given public-facing name. This
     # implementation will always return a single field (in an array), but
     # CompositeSetup objects might return more than one.
     #
     def text_fields(field_name)
-      text_field = 
+      text_field =
         if field_factory = @text_field_factories_cache[field_name.to_sym]
           field_factory.build
         else
@@ -147,7 +153,7 @@ module Sunspot
       end
     end
 
-    # 
+    #
     # Return the DynamicFieldFactory with the given base name
     #
     def dynamic_field_factory(field_name)
@@ -157,21 +163,31 @@ module Sunspot
       )
     end
 
-    # 
+    #
     # Return all attribute fields
     #
     def fields
       field_factories.map { |field_factory| field_factory.build }
     end
 
-    # 
+    #
     # Return all text fields
     #
     def all_text_fields
       text_field_factories.map { |text_field_factory| text_field_factory.build }
     end
 
-    # 
+    #
+    # Return all text fields configured for more_like_this search
+    #
+    def more_like_this_fields
+      @more_like_this_factories_cache.map do |field_factory|
+        field_factory.build
+      end
+    end
+
+
+    #
     # Get the field_factories associated with this setup as well as all inherited field_factories
     #
     # ==== Returns
@@ -182,7 +198,7 @@ module Sunspot
       collection_from_inheritable_hash(:field_factories)
     end
 
-    # 
+    #
     # Get the text field_factories associated with this setup as well as all inherited
     # text field_factories
     #
@@ -194,7 +210,7 @@ module Sunspot
       collection_from_inheritable_hash(:text_field_factories)
     end
 
-    # 
+    #
     # Get all static, dynamic, and text field_factories associated with this setup as
     # well as all inherited field_factories
     #
@@ -209,9 +225,9 @@ module Sunspot
       all_field_factories
     end
 
-    # 
+    #
     # Get all dynamic field_factories for this and parent setups
-    # 
+    #
     # ==== Returns
     #
     # Array:: Dynamic field_factories
@@ -220,7 +236,7 @@ module Sunspot
       collection_from_inheritable_hash(:dynamic_field_factories)
     end
 
-    # 
+    #
     # Return the class associated with this setup.
     #
     # ==== Returns
@@ -231,7 +247,7 @@ module Sunspot
       Util.full_const_get(@class_name)
     end
 
-    # 
+    #
     # Get the document boost for a given model
     #
     def document_boost_for(model)
@@ -242,11 +258,11 @@ module Sunspot
 
     protected
 
-    # 
+    #
     # Get the nearest inherited setup, if any
     #
     # ==== Returns
-    # 
+    #
     # Sunspot::Setup:: Setup for the nearest ancestor of this setup's class
     #
     def parent
@@ -268,7 +284,7 @@ module Sunspot
     end
 
     class <<self
-      # 
+      #
       # Retrieve or create the Setup instance for the given class, evaluating
       # the given block to add to the setup's configuration
       #
@@ -276,7 +292,7 @@ module Sunspot
         self.for!(clazz).setup(&block)
       end
 
-      # 
+      #
       # Retrieve the setup instance for the given class, or for the nearest
       # ancestor that has a setup, if any.
       #
@@ -288,7 +304,7 @@ module Sunspot
       #
       # Sunspot::Setup::
       #   Setup instance associated with the given class or its nearest ancestor
-      #   
+      #
       def for(clazz) #:nodoc:
         class_name =
           if clazz.respond_to?(:name)
@@ -301,7 +317,7 @@ module Sunspot
 
       protected
 
-      # 
+      #
       # Retrieve or create a Setup instance for this class
       #
       # ==== Parameters
