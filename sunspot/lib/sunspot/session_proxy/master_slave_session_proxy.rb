@@ -20,8 +20,8 @@ module Sunspot
       delegate :batch, :commit, :commit_if_delete_dirty, :commit_if_dirty,
                :config, :delete_dirty?, :dirty?, :index, :index!, :remove,
                :remove!, :remove_all, :remove_all!, :remove_by_id,
-               :remove_by_id!, :more_like_this, :to => :master_session
-      delegate :new_search, :search, :to => :slave_session
+               :remove_by_id!, :to => :master_session
+      delegate :new_search, :search, :more_like_this, :to => :slave_session
 
       def initialize(master_session, slave_session)
         @master_session, @slave_session = master_session, slave_session
